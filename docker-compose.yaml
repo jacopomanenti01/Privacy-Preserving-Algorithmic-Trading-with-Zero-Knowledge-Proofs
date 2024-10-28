@@ -1,0 +1,23 @@
+# docker-compose.yml
+version: '3'
+services:
+  pythonapp:
+    build: 
+      context: ./backend/
+    container_name: backend
+    command: sh -c "sleep 10s ; python3 ./hello_world.py"
+    depends_on:
+      - mysql
+  
+  mysql:
+    build: 
+      context: ./sqlserver/
+    container_name: mysql_server
+    restart: always
+    environment:
+      MYSQL_DATABASE: db
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: test
+      MYSQL_PASSWORD: root
+    ports:
+      - "3307:3306"
