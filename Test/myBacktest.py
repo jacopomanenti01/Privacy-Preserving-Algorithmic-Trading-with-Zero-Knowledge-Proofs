@@ -2,6 +2,7 @@ from backtesting import Backtest, Strategy
 from backtesting.lib import crossover, TrailingStrategy
 import talib
 
+
 class FirstStrategy(Strategy):
 
     upper_bound = 60

@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "./Test/Trading Strategy Ml",
+        "./Test/Trading Strategy Ml"
+    ]
+}
