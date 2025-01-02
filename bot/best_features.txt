@@ -1,5 +1,5 @@
 RSI
-MACD
 Stoch_K
+Stoch_D
 Williams_R
 CCI
