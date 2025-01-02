@@ -1,0 +1,5 @@
+RSI
+Stoch_K
+Stoch_D
+Williams_R
+CCI
