@@ -1,3 +1,4 @@
+
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from featureGenerator import generate_features
@@ -10,6 +11,8 @@ from sklearn.utils import class_weight
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import make_scorer, precision_score
 import pickle
+import os
+import joblib
 
 
 
@@ -119,7 +122,8 @@ print(report)
 print("Model training completed.")
 
 print("Saving model...")
-with open('binary_classifier.pkl', 'wb') as file:
-    pickle.dump(best_model, file)
+
+model_path = os.path.join(os.path.dirname(__file__), 'best_model_xboost.joblib')
+joblib.dump(best_model, model_path)
 
 print("Model saved")
