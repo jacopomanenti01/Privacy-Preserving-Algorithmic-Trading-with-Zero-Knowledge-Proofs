@@ -44,19 +44,25 @@ OVERBOUGHT_THRESH = 60
 OVERSOLD_THRESH = 40
 PERC_THRESH = 3
 CLOSE_POSITION_THRESH = 50
-ticker = "ETH/USD"
+ticker = "AAPL"
 
 # initialize the model
 repo_root = os.path.dirname(os.path.dirname(__file__))
 path = os.path.join(repo_root, "Test", "mlModel", "best_model_xboost.joblib")
 print(path)
-
-
-
 model = joblib.load(path)
 
 # helper function for placing the market order
-def place_market_order(side, take_profit, stop_loss):
+def place_market_order(side,price):
+
+    stop_loss = round(price*(1 - sl_perc),2)
+    take_profit = round(price*(1 + tp_perc),2)
+    stop_loss = StopLossRequest(stop_price = stop_loss, 
+                                limit_price = stop_loss)
+    take_profit = TakeProfitRequest(limit_price=take_profit)
+
+    print(f"Price:{price}, \n Take: {take_profit}, \n Stop: {stop_loss}")
+
     order_data = MarketOrderRequest(
         symbol = ticker,
         qty = 1,
@@ -74,16 +80,17 @@ def close_position():
 
 def get_historical_data(ticker):
     print("Retriving data")
-    end = datetime.datetime.utcnow()
-    #datetime.datetime(2024,12,31,19,22)
+    end = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=20)
+    print(end)
 
-    '''
+    
     request_params = StockBarsRequest(
         symbol_or_symbols=ticker,
         timeframe = TimeFrame.Minute,
-        start = end - datetime.timedelta(minutes=49),
+        start = end - datetime.timedelta(minutes=80),
         end = end
         )
+
     '''
     
     request_params = CryptoBarsRequest(
@@ -97,10 +104,9 @@ def get_historical_data(ticker):
 
     '''    
     bars = stock_data_client.get_stock_bars(request_params=request_params)
-    '''
     bars_pd = pd.DataFrame(dict(bar) for bar in bars[ticker])
 
-    print(f"historical dataframe: {bars_pd}")
+    print(f"historical dataframe: \n{bars_pd}")
     return bars_pd
 
 def get_pl_client():
@@ -109,6 +115,7 @@ def get_pl_client():
     return plpc
 
 def update_position(old_take, new_take, old_stop, new_stop):
+    print(f"updating take:{old_take.id} \n stop:{old_stop.id}")
     trading_client.replace_order_by_id(old_take.id, new_take)
     trading_client.replace_order_by_id(old_stop.id, new_stop)
 
@@ -118,7 +125,9 @@ def update_position(old_take, new_take, old_stop, new_stop):
 
 bars = get_historical_data(ticker)
 
-has_position = True
+positions = trading_client.get_all_positions()
+has_positions =  len(positions) > 0 
+print(f"has position?: {has_positions}")
 is_long  = False
 is_short = False
 current_stop_loss= None
@@ -126,42 +135,49 @@ current_take_profit = None
 tp_perc = .10
 sl_perc = .04
 
+# Debug functions
 def test_buy(price): 
-    print("testing buy function")
-    stop_loss = price*(1 - sl_perc)
-    take_profit = price*(1 + tp_perc)
-    stop_loss = StopLossRequest(stop_price = stop_loss, limit_price = stop_loss)
-    take_profit = TakeProfitRequest(limit_price=take_profit)
-    print(f"\nAttempting to buy at price: {price}, stop loss: {stop_loss}, take profit: {take_profit} ")
 
-    parent_order = place_market_order(OrderSide.BUY, take_profit, stop_loss)
+    print("testing buy function")
+    
+    parent_order = place_market_order(OrderSide.BUY, price)
+
     print(f"Parent order:{parent_order}")
     current_take_profit = parent_order.legs[0]
     current_stop_loss = parent_order.legs[1]
+    print(f"\nCurrent take:{current_take_profit}")
+    print(f"\nCurrent stop: {current_stop_loss}")
+
     has_position = True
     is_long = True
     print(f"\nOrder placed succesfully: {parent_order}.")
 
     return current_take_profit, current_stop_loss, has_position
 
-def test_update(price):
+def test_update(price, current_take_profit,current_stop_loss ):
     print("Testing update function")
     plpc = get_pl_client()
     print(f"\nCurrent position plpc: {plpc}")
     if plpc >= -0.00001:
-                    new_stop_loss =  price*(1 - sl_perc)
-                    new_take_profit = price*(1 + tp_perc)
+                    new_stop_loss =  round(price*(1 - sl_perc),2)
+                    new_take_profit = round(price*(1 + tp_perc),2)
                     take_profit_update = ReplaceOrderRequest(limit_price=new_take_profit)
-                    stop_loss_update = ReplaceOrderRequest(stop_price=new_stop_loss)
+                    stop_loss_update = ReplaceOrderRequest(
+                        stop_price=new_stop_loss,
+                        limit_price=new_stop_loss  
+                    )
                     print(f"\nRe-entering with Take profift at:{new_take_profit} and Stop loss at: {new_stop_loss}")
                     update_position(old_take=current_take_profit, 
                                     new_take=take_profit_update,
                                     old_stop=current_stop_loss, 
                                     new_stop =stop_loss_update)
                     print("Position updated correclty")
+
                     return new_stop_loss, new_take_profit
+    else:
+        return current_stop_loss, current_take_profit
 
-
+# Fallback function
 async def on_new_bar(bar):
    global bars
    global has_position
@@ -182,15 +198,17 @@ async def on_new_bar(bar):
 
      rsi_value = talib.RSI(df['close'], timeperiod=14).iloc[-1]
      print(f"RSI IS {rsi_value}")
+
      price = df['close'].iloc[-1]
      print(f"Price is {price}")
+
      features = features_extraction(df)
      prediction = trend_classification(features, model)
 
      if not has_position:
         current_take_profit, current_stop_loss, has_position = test_buy(price)
      elif has_position:
-        current_stop_loss, current_take_profit = test_update(price)
+        current_stop_loss, current_take_profit = test_update(price, current_take_profit,current_stop_loss )
 
      # Trading logic
 
@@ -202,8 +220,8 @@ async def on_new_bar(bar):
             if not has_position:
                 print("\nBuy signal, as we did not have a position.")
 
-                stop_loss = price*(1 - sl_perc)
-                take_profit = price*(1 + tp_perc)
+                stop_loss = round(price*(1 - sl_perc),2)
+                take_profit = round(price*(1 + tp_perc),2)
                 stop_loss = StopLossRequest(stop_price = stop_loss, limit_price = stop_loss)
                 take_profit = TakeProfitRequest(limit_price=take_profit)
                 print(f"\nAttempting to buy at price: {price}, stop loss: {stop_loss}, take profit: {take_profit} ")
@@ -221,22 +239,21 @@ async def on_new_bar(bar):
                 plpc = get_pl_client()
                 print(f"\nCurrent position plpc: {plpc}")
                 if plpc >= PERC_THRESH:
-                    new_stop_loss =  price*(1 - sl_perc)
-                    new_take_profit = price*(1 + tp_perc)
+                    new_stop_loss =  round(price*(1 - sl_perc),2)
+                    new_take_profit = round(price*(1 + tp_perc),2)
                     take_profit_update = ReplaceOrderRequest(limit_price=new_take_profit)
                     stop_loss_update = ReplaceOrderRequest(stop_price=new_stop_loss)
                     print(f"\nRe-entering with Take profift at:{new_take_profit} and Stop loss at: {new_stop_loss}")
                     update_position(old_take=current_take_profit, 
                                     new_take=take_profit_update,
                                     old_stop=current_stop_loss, 
-                                    new_stop_loss =stop_loss_update)
+                                    new_stop =stop_loss_update)
                     print("Position updated correclty")
                     current_stop_loss = new_stop_loss
                     current_take_profit = new_take_profit
 
 
-        elif prediction == 2 and has_position == True:
-            
+        elif prediction == 2 and has_position == True:   
             print("\n Sell signal, as we do have a position.")
             print(f"\nAttempting to close at price:")
             close_position()
@@ -257,15 +274,15 @@ async def on_new_bar(bar):
                 plpc = get_pl_client()
                 print(f"\nCurrent position plpc: {plpc}")
                 if plpc >= PERC_THRESH:
-                    new_stop_loss =  price*(1 - sl_perc)
-                    new_take_profit = price*(1 + tp_perc)
+                    new_stop_loss =  round(price*(1 - sl_perc),2)
+                    new_take_profit = round(price*(1 + tp_perc),2)
                     take_profit_update = ReplaceOrderRequest(limit_price=new_take_profit)
                     stop_loss_update = ReplaceOrderRequest(stop_price=new_stop_loss)
                     print(f"\nRe-entering with Take profift at:{new_take_profit} and Stop loss at: {new_stop_loss}")
                     update_position(old_take=current_take_profit, 
                                     new_take=take_profit_update,
                                     old_stop=current_stop_loss, 
-                                    new_stop_loss =stop_loss_update)
+                                    new_stop =stop_loss_update)
                     print("Position updated correclty")
                     current_stop_loss = new_stop_loss
                     current_take_profit = new_take_profit
@@ -285,18 +302,18 @@ async def on_new_bar(bar):
       
 
    # drop the first row and ensures bars always maintains exactly 50 rows.
-   #bars = df.iloc[1:].reset_index(drop=True)
    bars = df.tail(50).reset_index(drop=True)
 
 
 
 
 # Streaming real data
+'''
 stream = CryptoDataStream(api_key, api_secret)
 
 '''
 stream = StockDataStream(api_key,api_secret)
-'''
+
 
 print("Ready to run")
 stream.subscribe_bars(on_new_bar, 
@@ -305,11 +322,3 @@ stream.subscribe_bars(on_new_bar,
 stream.run()
 
 
-'''
-- RSI: 14 days back 
-- Test slow
-- Few trades
-
--  strategy 1m timeframe
--  test with data >09/2024
-'''
