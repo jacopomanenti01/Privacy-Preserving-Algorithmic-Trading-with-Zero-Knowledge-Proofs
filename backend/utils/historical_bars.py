@@ -23,7 +23,7 @@ class GetHistoricalBars():
 
     def build_params(self, delta):
         end = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=20)
-        print(end)
+        print(f"Data retreived untill {end}")
         request_params = StockBarsRequest(
             symbol_or_symbols=self.ticker,
             timeframe = TimeFrame.Minute,
@@ -46,7 +46,7 @@ class GetHistoricalBars():
         '''  
     def retreive_historical_bars(self, delta):  
         self.build_params(delta)
-        bars = self.stock_data_client.get_stock_bars(request_params=self.request_params)
+        bars = self.stock_data_client.get_stock_bars(self.params)
         bars_pd = pd.DataFrame(dict(bar) for bar in bars[self.ticker])
 
         print(f"historical dataframe: \n{bars_pd}")
