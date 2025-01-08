@@ -7,20 +7,23 @@ from alpaca.common.exceptions import APIError
 
 
 
-
 import pandas as pd
 from dotenv import load_dotenv
 import talib
 import os
 import joblib
+import asyncio
 
 
 
 # Internal Imports
 from utils.feature import features_extraction
 from utils.prediction import trend_classification
-
 from utils.historical_bars import GetHistoricalBars
+
+from database.influxdb import (get_influx_client,
+    write_throughput)
+
 
 
 
@@ -63,6 +66,19 @@ class TradingBot():
         self.streamer = StockDataStream(api_key,api_secret)
 
 
+        # need to set
+        self.influx_client = None
+        self.influx_write_api = None
+
+
+
+    def initialize_data(self):
+        self.data = self.broker.retreive_historical_bars(self.delta)
+        
+    async def init_influx_db(self):
+        self.influx_client = await get_influx_client()
+        self.influx_write_api = self.influx_client.write_api()
+
     def check_has_position(self):
         positions = self.trading_client.get_all_positions()
         self.has_position = len(positions) > 0 
@@ -71,8 +87,6 @@ class TradingBot():
         else:
             print("You don't have a position yet")
         
-        
-
     # helper function for placing the market order
     def place_market_order(self, side,price):
 
@@ -122,7 +136,6 @@ class TradingBot():
         new_stop_loss = self.trading_client.replace_order_by_id(self.current_stop_loss.id, new_stop)
         return new_take_profit, new_stop_loss
 
-
     def buy_bracket(self): 
         # place order
         parent_order = self.place_market_order(OrderSide.BUY, self.price)
@@ -138,6 +151,7 @@ class TradingBot():
 
 
         print(f"\nOrder placed succesfully: {parent_order}.")
+        return parent_order
 
     def retrieve_brackets(self):
         # get all open positions
@@ -164,7 +178,6 @@ class TradingBot():
             # means that the last 3 orders were take/profit updates
             self.current_stop_loss  = ticker_arr[0]
             self.current_take_profit = ticker_arr[1]
-
 
     def update_bracket(self):
 
@@ -203,6 +216,8 @@ class TradingBot():
                 self.current_take_profit = new_take_profit
                 self.current_stop_loss = new_stop_loss
 
+                return (new_take_profit,new_stop_loss)
+
             except APIError as e:
                 if "order parameters are not changed" in str(e):
                     print("Order parameters haven't changed. Skipping update.")
@@ -220,10 +235,8 @@ class TradingBot():
             print(f"\n failed to update position, plpc {plpc} < threshold {self.PERC_THRESH}")
             return
     
-    
-    def initialize_data(self):
-        self.data = self.broker.retreive_historical_bars(self.delta)
-
+    async def store_order(self, order, is_updated = False):
+        await write_throughput(self.influx_write_api, order, self.price, is_updated)
 
     # Fallback function
     async def on_new_bar(self,bar):
@@ -235,6 +248,8 @@ class TradingBot():
     
         if len(df)>=50: # Need at least 50 bars to calculate SMA_50 (check feature.py in utils folder)
             print(df)
+
+
             self.check_has_position()
             # Calculate Latest RSI
 
@@ -248,6 +263,7 @@ class TradingBot():
             prediction = trend_classification(features, self.model)
 
 
+
             # Trading logic
             if rsi_value<=self.OVERSOLD_THRESH:
                 print(f"\nOversold condition met: current RSI is {rsi_value}<{self.OVERSOLD_THRESH}")
@@ -256,14 +272,23 @@ class TradingBot():
                 if prediction ==1: 
                     if not self.has_position:
                         print("\nBuy signal, as we did not have a position.")
-                        self.buy_bracket()
+                        order = self.buy_bracket()
+                        if order is not None:  # Make sure order was updated successfully
+                            try:
+                                await self.store_order(order=order)
+                                print("Order added and stored successfully")
+                            except Exception as e:
+                                print(f"Failed to store updated order: {e}")
 
-                        
                     elif self.has_position:
                         print("\nUpdate signal, as we have already a position, rsi <oversold threshold, up-trend prediction")
-                        self.update_bracket()
-
-
+                        order = self.update_bracket()
+                        if order is not None:  # Make sure order was updated successfully
+                            try:
+                                await self.store_order(order=order, is_updated=True)
+                                print("Order updated and stored successfully")
+                            except Exception as e:
+                                print(f"Failed to store updated order: {e}")
 
                 elif prediction == 2 and self.has_position == True:   
                     print("\n Sell signal, as we do have a position.")
@@ -282,7 +307,13 @@ class TradingBot():
 
                 if prediction == 1:
                     if self.has_position:
-                        self.update_bracket()
+                        order = self.update_bracket()
+                        if order is not None:  # Make sure order was updated successfully
+                            try:
+                                await self.store_order(order=order, is_updated=True)
+                                print("Order updated and stored successfully")
+                            except Exception as e:
+                                print(f"Failed to store updated order: {e}")
 
 
                         
@@ -298,13 +329,13 @@ class TradingBot():
         # drop the first row and ensures bars always maintains exactly 50 rows.
         self.data = df.tail(50).reset_index(drop=True)
 
-    def run(self):
+    async def run(self):
         self.streamer.subscribe_bars(self.on_new_bar, 
                             self.ticker)
         print("Ready to run, waiting for a new stream to come")
         
 
-        self.streamer.run()
+        await self.streamer._run_forever()
 
 
 
@@ -316,12 +347,7 @@ class TradingBot():
 
 
 
-
-
-        
-            
-if __name__ =="__main__":
-    # initialize the model
+async def main():
     repo_root = os.path.dirname(os.path.dirname(__file__))
     path = os.path.join(repo_root, "Test", "mlModel", "best_model_xboost.joblib")
     print(f"Model in path: {path}")
@@ -344,11 +370,13 @@ if __name__ =="__main__":
                  model_path=path,
                  delta=80)
     
+    await bot.init_influx_db()
+    
     # initialize data
     bot.initialize_data()
 
     # run the model
-    bot.run()
+    await bot.run()
 
     # condition to stop it
     
@@ -356,3 +384,14 @@ if __name__ =="__main__":
 
 
 
+
+
+
+        
+            
+if __name__ =="__main__":
+    # initialize the model
+    asyncio.run(main())
+
+
+    

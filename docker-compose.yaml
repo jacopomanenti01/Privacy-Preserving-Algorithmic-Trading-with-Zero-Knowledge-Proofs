@@ -1,23 +1,44 @@
 # docker-compose.yml
 version: '3'
+
 services:
   pythonapp:
     build: 
       context: ./backend/
     container_name: backend
-    command: sh -c "sleep 10s ; python3 ./hello_world.py"
-    depends_on:
-      - mysql
-  
-  mysql:
-    build: 
-      context: ./sqlserver/
-    container_name: mysql_server
-    restart: always
-    environment:
-      MYSQL_DATABASE: db
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_USER: test
-      MYSQL_PASSWORD: root
+
+  influxdb:
+    image: influxdb:latest
     ports:
-      - "3307:3306"
+      - '8086:8086'
+    volumes:
+      - influxdb-storage:/var/lib/influxdb
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - '3001:3000'
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana-provisioning/:/etc/grafana/provisioning/
+    depends_on:
+      - influxdb
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USERNAME}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+      # Kafka plugin is useless and limited
+      # - GF_INSTALL_PLUGINS=hamedkarbasi93-kafka-datasource
+volumes:
+  influxdb-storage:
+  grafana-storage:
+
+
