@@ -26,10 +26,25 @@ url = "http://" + os.getenv("INFLUX_ADDRESS", "localhost:8086")
 async def get_influx_client() -> InfluxDBClientAsync:
     return InfluxDBClientAsync(url=url, token=INFLUX_TOKEN, org=INFLUX_ORG)
 
+async def close_throughput(write_api: WriteApiAsync, datapoint: dict, price) -> None:
+    print("\n ''''''''''''''''''''''''")
+    print("\ncreating data point for closed position:")
+    point = Point("closed_position")
+    point = point.field('OrderID', str(datapoint.id))
+    point = point.field('symbol', str(datapoint.symbol))
+
+    point = point.field('OrderSide', datapoint.side)
+    point = point.field('OrderQTY', float(datapoint.qty))
+    point = point.field('ClosePrice', price)
+    point = point.time(datapoint.submitted_at)
+    
+    await write_api.write(bucket=THROUGHPUT_BUCKET, org=INFLUX_ORG, record=point)
+    print("New closed position data point saved on influxdb")
+
+
+
 
 async def write_throughput(write_api: WriteApiAsync, datapoint: dict, price, is_updated) -> None:
-    # Create a point and add all fields
-    # datapoint is an MarketOrder Object
 
     if not is_updated:
         print("\n ''''''''''''''''''''''''")
@@ -96,13 +111,11 @@ async def write_throughput(write_api: WriteApiAsync, datapoint: dict, price, is_
         query_api = client.query_api()
 
         result = await query_api.query_data_frame(query=query)
-        print(result)
 
         if not result.empty:
             take_profit = float(result["TakeProfit"].iloc[0])
             stop_loss = float(result["StopLoss"].iloc[0])
         elif result.empty:
-            print("CAzzo")
             query = f'''
         from(bucket: "{THROUGHPUT_BUCKET}")
             |> range(start: -24h)
@@ -111,11 +124,9 @@ async def write_throughput(write_api: WriteApiAsync, datapoint: dict, price, is_
             |> filter(fn: (r) => r.NewTakeProfitID == "{old_take_id}")
             |> yield(name: "last")
         '''
-            print(f"old take profit id {old_take_id}")
             result = await query_api.query_data_frame(query=query)
-            print(result)
-            take_profit = float(result["OldTakeProfit"].iloc[0])
-            stop_loss = float(result["OldStopLoss"].iloc[0])
+            take_profit = float(result["NewTakeProfit"].iloc[0])
+            stop_loss = float(result["NewStopLoss"].iloc[0])
 
 
         point = Point("bracket_updates") \

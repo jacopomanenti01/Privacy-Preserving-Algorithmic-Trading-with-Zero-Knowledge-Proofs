@@ -22,7 +22,8 @@ from utils.prediction import trend_classification
 from utils.historical_bars import GetHistoricalBars
 
 from database.influxdb import (get_influx_client,
-    write_throughput)
+    write_throughput,
+    close_throughput)
 
 
 
@@ -237,6 +238,9 @@ class TradingBot():
     
     async def store_order(self, order, is_updated = False):
         await write_throughput(self.influx_write_api, order, self.price, is_updated)
+    
+    async def store_closed_position(self, order):
+        await close_throughput(self.influx_write_api, order, self.price)
 
     # Fallback function
     async def on_new_bar(self,bar):
@@ -261,8 +265,7 @@ class TradingBot():
 
             features = features_extraction(df)
             prediction = trend_classification(features, self.model)
-
-
+            
 
             # Trading logic
             if rsi_value<=self.OVERSOLD_THRESH:
@@ -293,7 +296,13 @@ class TradingBot():
                 elif prediction == 2 and self.has_position == True:   
                     print("\n Sell signal, as we do have a position.")
                     print(f"\nAttempting to close at price:")
-                    self.close_position()
+                    closed_order = self.close_position()[0].body
+                    if closed_order is not None:  # Make sure order was updated successfully
+                            try:
+                                await self.store_closed_position(order=closed_order)
+                                print("Closed order added and stored successfully")
+                            except Exception as e:
+                                print(f"Failed to store updated order: {e}")
 
                     print("\nPosition closed succesfully")
 
@@ -322,7 +331,14 @@ class TradingBot():
                 elif prediction == 2 and self.has_position:
                     print("\n Sell signal, as we do have a position.")
                     print(f"\nAttempting to close at price:")
-                    self.close_position()
+                    closed_order = self.close_position()[0].body
+                    if closed_order is not None:  # Make sure order was updated successfully
+                            try:
+                                await self.store_closed_position(order=closed_order)
+                                print("Closed order added and stored successfully")
+                            except Exception as e:
+                                print(f"Failed to store updated order: {e}")
+
                     print("\nPosition closed succesfully")
             
 
