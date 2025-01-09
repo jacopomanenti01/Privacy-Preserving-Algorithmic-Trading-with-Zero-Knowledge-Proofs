@@ -380,7 +380,7 @@ async def main():
                  api_secret=api_secret, 
                  OVERBOUGHT_THRESH=60, 
                  OVERSOLD_THRESH=40, 
-                 PERC_THRESH=0.5,
+                 PERC_THRESH=-500000,
                  tp_perc=.10, 
                  sl_perc=.04,
                  model_path=path,
