@@ -21,8 +21,11 @@ class GetHistoricalBars():
         self.stock_data_client = StockHistoricalDataClient(api_key, api_secret)
 
 
-    def build_params(self, delta):
-        end = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=20)
+    def build_params(self, delta, day = None):
+        if day != None:
+            end = day
+        else:
+            end = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=20)
         # Get current time
         now = datetime.datetime.now(datetime.timezone.utc)
         # Start from the previous trading day to ensure we have data
@@ -51,8 +54,8 @@ class GetHistoricalBars():
         bars = cryto_data_client.get_crypto_bars(request_params=request_params)
 
         '''  
-    def retreive_historical_bars(self, delta):  
-        self.build_params(delta)
+    def retreive_historical_bars(self, delta, day = None):  
+        self.build_params(delta, day)
         bars = self.stock_data_client.get_stock_bars(self.params)
         bars_pd = pd.DataFrame(dict(bar) for bar in bars[self.ticker])
 
