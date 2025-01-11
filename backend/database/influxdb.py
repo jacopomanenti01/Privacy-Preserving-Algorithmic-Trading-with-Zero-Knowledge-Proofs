@@ -26,16 +26,19 @@ url = "http://" + os.getenv("INFLUX_ADDRESS", "localhost:8086")
 async def get_influx_client() -> InfluxDBClientAsync:
     return InfluxDBClientAsync(url=url, token=INFLUX_TOKEN, org=INFLUX_ORG)
 
-async def close_throughput(write_api: WriteApiAsync, datapoint: dict, price) -> None:
+async def close_throughput(write_api: WriteApiAsync, datapoint: dict, price, risk) -> None:
     print("\n ''''''''''''''''''''''''")
     print("\ncreating data point for closed position:")
     point = Point("closed_position")
-    point = point.field('OrderID', str(datapoint.id))
+    point = point.field('OrderID', str(risk["id"]))
     point = point.field('symbol', str(datapoint.symbol))
 
     point = point.field('OrderSide', datapoint.side)
-    point = point.field('OrderQTY', float(datapoint.qty))
+    point = point.field('OrderQTY', float(risk["qty"]))
     point = point.field('ClosePrice', price)
+    point = point.field('unrealized_plpc', float(risk["unrealized_plpc"]))
+    point = point.field('pl', bool(risk["pl"]))
+
     point = point.time(datapoint.submitted_at)
     
     await write_api.write(bucket=THROUGHPUT_BUCKET, org=INFLUX_ORG, record=point)

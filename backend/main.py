@@ -1,10 +1,10 @@
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest, StopLossRequest, TakeProfitRequest, ReplaceOrderRequest
+from alpaca.trading.requests import MarketOrderRequest, StopLossRequest, TakeProfitRequest, ReplaceOrderRequest, ClosePositionRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass, QueryOrderStatus
 from alpaca.data.live import StockDataStream
 from alpaca.trading.requests import GetOrdersRequest
 from alpaca.common.exceptions import APIError
-
+import time
 
 
 import pandas as pd
@@ -51,7 +51,6 @@ class TradingBot():
 
         self.model = joblib.load(model_path)
 
-        self.has_position =  False    # can I use directly the function?
 
         self.current_stop_loss= None
         self.current_take_profit = None
@@ -81,13 +80,35 @@ class TradingBot():
         self.influx_write_api = self.influx_client.write_api()
 
     def check_has_position(self):
-        positions = self.trading_client.get_all_positions()
-        self.has_position = len(positions) > 0 
-        if self.has_position:
-            print("You have already a position")
-        else:
-            print("You don't have a position yet")
-        
+            try:
+                a = self.trading_client.get_open_position(self.ticker)
+                print(a)
+                # Position exists
+                print(f"You have already a position for {self.ticker}")
+
+                return True
+            except APIError as e:
+                if "position does not exist" in str(e):
+                    # No position exists - this is a normal case
+                    print(e)
+                    return False
+                else:
+                    # Some other API error occurred
+                    print(f"Unexpected API error: {e}")
+                    return False
+            except Exception as e:
+                # Handle any other unexpected errors
+                print(f"Error checking position: {e}")
+                return False
+            '''
+            positions = self.trading_client.get_open_position(self.ticker)
+            self.has_position = len(positions) > 0 
+            if self.has_position:
+                print(f"You have already a position for {self.ticker}")
+            else:
+                print(f"You don't have a position yetfor {self.ticker}")
+            '''
+
     # helper function for placing the market order
     def place_market_order(self, side,price):
 
@@ -123,9 +144,42 @@ class TradingBot():
         return self.trading_client.submit_order(order_data)
 
     def close_position(self):
-        self.has_position = False
-        return self.trading_client.close_all_positions(True)
-    
+        print("Cancelling pending orders")
+        # Create filter for open orders of this symbol
+        order_filter = GetOrdersRequest(
+            status='open',
+            symbol=self.ticker
+        )
+        
+        # Get and cancel all matching orders
+        orders = self.trading_client.get_orders(filter=order_filter)
+        print(f"order len : {len(orders)}")
+        id = None
+        for order in orders:
+            id = order.id
+            self.trading_client.cancel_order_by_id(order.id)
+        # Wait a moment for orders to be cancelled
+        time.sleep(1)
+
+
+        print("Getting position")
+        pos = self.trading_client.get_open_position(self.ticker)
+        close_options = ClosePositionRequest(qty=str(pos.qty))
+
+        print(f"Bought at  entry price of: {float(pos.avg_entry_price)}, closing at current price : {float(pos.current_price)} ")
+        profit_or_loss = float(pos.avg_entry_price) >= float(pos.current_price)
+        new_dict = {
+            "unrealized_plpc" : pos.unrealized_plpc,
+            "pl" : profit_or_loss,
+            "qty": round(float(pos.qty) / 2, 0),
+            "id": id
+        }
+
+        print("Closing position")
+        closed_orders = self.trading_client.close_position(self.ticker, close_options=close_options)
+        print("Closed")
+        return new_dict, closed_orders
+
     def get_pl_client(self):
         pos_info = self.trading_client.get_all_positions()[0]
         plpc = float(pos_info.unrealized_plpc)*100
@@ -145,7 +199,6 @@ class TradingBot():
         current_stop_loss = parent_order.legs[1]
 
         # set flags
-        self.has_position = True
         self.current_stop_loss = current_stop_loss
         self.current_take_profit = current_take_profit
 
@@ -239,8 +292,8 @@ class TradingBot():
     async def store_order(self, order, is_updated = False):
         await write_throughput(self.influx_write_api, order, self.price, is_updated)
     
-    async def store_closed_position(self, order):
-        await close_throughput(self.influx_write_api, order, self.price)
+    async def store_closed_position(self,risk, order):
+        await close_throughput(self.influx_write_api, order, self.price, risk)
 
     # Fallback function
     async def on_new_bar(self,bar):
@@ -254,10 +307,9 @@ class TradingBot():
             print(df)
 
 
-            self.check_has_position()
             # Calculate Latest RSI
 
-            rsi_value = talib.RSI(df['close'], timeperiod=14).iloc[-1]
+            rsi_value = round(talib.RSI(df['close'], timeperiod=14).iloc[-1],2)
             print(f"RSI IS {rsi_value}")
 
             self.price = df['close'].iloc[-1]
@@ -265,7 +317,33 @@ class TradingBot():
 
             features = features_extraction(df)
             prediction = trend_classification(features, self.model)
+
+            # remove this
+            # fd10eb89-0790-481b-8f84-9da7984d85ba
             
+            order = self.buy_bracket()
+            await self.store_order(order=order)
+            #risk_metrics, closed_order = self.close_position()
+
+            #pos = self.trading_client.get_open_position(self.ticker)
+
+            #print("closing")
+
+            #risk_metrics, closed_order = self.close_position()
+
+            #await self.store_closed_position(risk =risk_metrics, order=closed_order)
+
+
+            print(f"This is buy order id: {order.id}")
+ 
+            risk_metrics, closed_order = self.close_position()
+            print(risk_metrics)
+            await self.store_closed_position(risk = risk_metrics, order=closed_order)
+            print(f"This is buy order id: {order.id}")
+            print(f"This is close order id: {risk_metrics}")
+
+
+
 
             # Trading logic
             if rsi_value<=self.OVERSOLD_THRESH:
@@ -273,7 +351,7 @@ class TradingBot():
                 print(f"\nCurrent trend predictin is: {prediction}")
 
                 if prediction ==1: 
-                    if not self.has_position:
+                    if not self.check_has_position():
                         print("\nBuy signal, as we did not have a position.")
                         order = self.buy_bracket()
                         if order is not None:  # Make sure order was updated successfully
@@ -283,7 +361,7 @@ class TradingBot():
                             except Exception as e:
                                 print(f"Failed to store updated order: {e}")
 
-                    elif self.has_position:
+                    elif self.check_has_position():
                         print("\nUpdate signal, as we have already a position, rsi <oversold threshold, up-trend prediction")
                         order = self.update_bracket()
                         if order is not None:  # Make sure order was updated successfully
@@ -293,18 +371,21 @@ class TradingBot():
                             except Exception as e:
                                 print(f"Failed to store updated order: {e}")
 
-                elif prediction == 2 and self.has_position == True:   
+                elif prediction == 2 and self.check_has_position() == True:   
                     print("\n Sell signal, as we do have a position.")
                     print(f"\nAttempting to close at price:")
-                    closed_order = self.close_position()[0].body
+                    risk_metrics, closed_order = self.close_position()
                     if closed_order is not None:  # Make sure order was updated successfully
                             try:
-                                await self.store_closed_position(order=closed_order)
+                                await self.store_closed_position(risk = risk_metrics, order=closed_order)
                                 print("Closed order added and stored successfully")
                             except Exception as e:
                                 print(f"Failed to store updated order: {e}")
 
                     print("\nPosition closed succesfully")
+                
+                elif prediction == 0:
+                    print("No position open or update, waiting for new stream")
 
 
 
@@ -315,7 +396,7 @@ class TradingBot():
                 print(f"\nCurrent trend predictin is: {prediction}")
 
                 if prediction == 1:
-                    if self.has_position:
+                    if self.check_has_position():
                         order = self.update_bracket()
                         if order is not None:  # Make sure order was updated successfully
                             try:
@@ -328,18 +409,21 @@ class TradingBot():
                         
 
                 
-                elif prediction == 2 and self.has_position:
+                elif prediction == 2 and self.check_has_position():
                     print("\n Sell signal, as we do have a position.")
                     print(f"\nAttempting to close at price:")
-                    closed_order = self.close_position()[0].body
+                    risk_metrics,closed_order = self.close_position()
                     if closed_order is not None:  # Make sure order was updated successfully
                             try:
-                                await self.store_closed_position(order=closed_order)
+                                await self.store_closed_position(risk = risk_metrics, order=closed_order)
                                 print("Closed order added and stored successfully")
                             except Exception as e:
                                 print(f"Failed to store updated order: {e}")
 
                     print("\nPosition closed succesfully")
+
+                elif prediction == 0:
+                    print("No position open or update, waiting for new stream")
             
 
         # drop the first row and ensures bars always maintains exactly 50 rows.
@@ -375,7 +459,7 @@ async def main():
 
 
     # initialize trading bot
-    bot = TradingBot(ticker = "AAPL", 
+    bot = TradingBot(ticker = "AAPL", #GOLD
                  api_key=api_key,
                  api_secret=api_secret, 
                  OVERBOUGHT_THRESH=60, 

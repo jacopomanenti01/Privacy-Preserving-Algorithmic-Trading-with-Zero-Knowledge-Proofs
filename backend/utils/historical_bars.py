@@ -22,11 +22,11 @@ class GetHistoricalBars():
 
 
     def build_params(self, delta):
-        #end = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=20)
+        end = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=20)
         # Get current time
         now = datetime.datetime.now(datetime.timezone.utc)
         # Start from the previous trading day to ensure we have data
-        end = now - datetime.timedelta(days=1)
+        #end = now - datetime.timedelta(days=1)
         start = end - datetime.timedelta(minutes=delta)
 
         print(f"Requesting data from {start} to {end}")
