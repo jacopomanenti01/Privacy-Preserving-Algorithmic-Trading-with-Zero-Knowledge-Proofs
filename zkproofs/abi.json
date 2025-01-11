@@ -1,0 +1,27 @@
+{
+  "inputs": [
+    {
+      "name": "rsi",
+      "public": false,
+      "type": "field"
+    },
+    {
+      "name": "prediction",
+      "public": false,
+      "type": "field"
+    },
+    {
+      "name": "oversold_threshold",
+      "public": true,
+      "type": "field"
+    },
+    {
+      "name": "overbought_threshold",
+      "public": true,
+      "type": "field"
+    }
+  ],
+  "output": {
+    "type": "field"
+  }
+}

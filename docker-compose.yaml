@@ -37,6 +37,13 @@ services:
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
       # Kafka plugin is useless and limited
       # - GF_INSTALL_PLUGINS=hamedkarbasi93-kafka-datasource
+  
+  zokrates:
+    image: zokrates/zokrates:latest
+    container_name: zokrates
+    volumes:
+      - ./zkproofs:/home/zokrates/code
+    command: tail -f /dev/null  # Keeps container running
 volumes:
   influxdb-storage:
   grafana-storage:
