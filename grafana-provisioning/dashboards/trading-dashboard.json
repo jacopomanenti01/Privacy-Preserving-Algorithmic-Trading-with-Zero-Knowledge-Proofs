@@ -383,10 +383,9 @@
             "axisBorderShow": false,
             "axisCenteredZero": true,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "Unrealized P/L (%)",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 20,
             "gradientMode": "scheme",
@@ -419,10 +418,14 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
               }
             ]
           },
-          "unit": "currencyUSD"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -432,7 +435,6 @@
         "x": 0,
         "y": 14
       },
-      "id": 5,
       "options": {
         "legend": {
           "calcs": [
@@ -445,25 +447,24 @@
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"${DOCKER_INFLUXDB_INIT_BUCKET}\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"ProfitLoss\")\n  |> aggregateWindow(every: 1h, fn: sum)\n  |> yield(name: \"Cumulative P/L\")",
+          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"unrealized_plpc\")\n  |> group(columns: [\"symbol\"])\n  |> aggregateWindow(every: 1h, fn: sum)\n  |> yield(name: \"Unrealized P/L by Symbol\")",
           "refId": "A"
         }
       ],
-      "title": "Profit/Loss Over Time",
-      "type": "timeseries"
-    },
-    {
+      "title": "Unrealized P/L by Symbol (%)",
+      "type": "timeseries",
+      "pluginVersion": "11.4.0"
+    },{
       "datasource": {
         "type": "influxdb",
         "uid": "P951FEA4DE68E13C5"
@@ -471,14 +472,39 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
           "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
+            "axisBorderShow": false,
+            "axisCenteredZero": true,
+            "axisColorMode": "text",
+            "axisLabel": "Unrealized P/L ($)",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "scheme",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
             },
-            "inspect": false
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
           "mappings": [],
           "thresholds": {
@@ -487,9 +513,14 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 0
               }
             ]
-          }
+          },
+          "unit": "currencyUSD"
         },
         "overrides": []
       },
@@ -499,33 +530,35 @@
         "x": 12,
         "y": 14
       },
-      "id": 6,
       "options": {
-        "cellHeight": "sm",
-        "footer": {
-          "countRows": false,
-          "fields": "",
-          "reducer": [
-            "sum"
+        "legend": {
+          "calcs": [
+            "mean",
+            "max",
+            "min"
           ],
-          "show": false
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
         },
-        "showHeader": true,
-        "sortBy": []
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"${DOCKER_INFLUXDB_INIT_BUCKET}\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> yield(name: \"Closed Trades\")",
+          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"unrealized_plpc\")\n  |> map(fn: (r) => ({ r with _value: r._value * 100000.0 }))\n  |> group(columns: [\"symbol\"])\n  |> aggregateWindow(every: 1h, fn: sum)\n  |> yield(name: \"Unrealized P/L by Symbol\")",
           "refId": "A"
         }
       ],
-      "title": "Recent Trades",
-      "type": "table"
+      "title": "Unrealized P/L by Symbol ($)",
+      "type": "timeseries",
+      "pluginVersion": "11.4.0"
     },
     {
       "collapsed": false,
