@@ -1,71 +1,75 @@
 import subprocess
+from utils.get_proof import Proof
+import asyncio
 
-def compute_witness(rsi, prediction, oversold, overbought, container_name='zokrates'):
-    """
-    Compute the witness and generate proof using ZoKrates inside a Docker container.
-    
-    Args:
-        rsi (int): Relative Strength Index value
-        prediction (int): Prediction value (0 or 1)
-        oversold (int): Oversold threshold
-        overbought (int): Overbought threshold
-        container_name (str): Name of the Docker container running ZoKrates
-    """
-    try:
-        # Construct the Docker exec command to run ZoKrates commands in /code directory
-        compute_witness_cmd = [
-            'docker', 'exec', '-it', container_name, '/bin/bash', '-c',
-            f'cd /code && zokrates compute-witness -a {rsi} {prediction} {oversold} {overbought}'
-        ]
-        
-        # Run the compute-witness command
-        compute_result = subprocess.run(
-            compute_witness_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        
-        # Check for any errors in computing witness
-        if compute_result.returncode != 0:
-            raise Exception(f"Error in compute-witness: {compute_result.stderr.strip()}")
-        
-        print("Witness computation successful.")
-        print(compute_result.stdout.strip())
-        
-        # Construct the Docker exec command to generate proof in /code directory
-        generate_proof_cmd = [
-            'docker', 'exec', '-it', container_name, '/bin/bash', '-c',
-            'cd /code && zokrates generate-proof'
-        ]
-        
-        # Run the generate-proof command
-        proof_result = subprocess.run(
-            generate_proof_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        
-        # Check for any errors in generating proof
-        if proof_result.returncode != 0:
-            raise Exception(f"Error in generate-proof: {proof_result.stderr.strip()}")
-        
-        print("Proof generation successful.")
-        print(proof_result.stdout.strip())
-    
-    except Exception as e:
-        print(f"Error during ZoKrates trading proof generation: {e}")
 
-def main():
-    # Example trading parameters
-    rsi = 25
-    prediction = 1
-    oversold = 30
-    overbought = 70
-    
-    # Generate trading proof inside the Docker container
-    compute_witness(rsi, prediction, oversold, overbought)
+import subprocess
+from utils.get_proof import Proof
+import asyncio
+import json
+
+class ZoKratesProof:
+    def __init__(self, container_name='zokrates'):
+        self.container_name = container_name
+
+    def execute_in_container(self, rsi, prediction, oversold, overbought):
+        # Create the command that will be executed inside the container
+        commands = f"""
+        cd code && \
+        zokrates compute-witness -a {rsi} {prediction} {oversold} {overbought} && \
+        zokrates generate-proof && \
+        zokrates verify
+        """
+        
+        try:
+            # Execute commands in container
+            result = subprocess.run(
+                ['docker', 'exec', self.container_name, '/bin/bash', '-c', commands],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print(result.stdout)
+            
+            # Get proof.json content
+            cat_command = "cd code && cat proof.json"
+            proof_result = subprocess.run(
+                ['docker', 'exec', self.container_name, '/bin/bash', '-c', cat_command],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            # Parse the JSON content
+            proof_data = json.loads(proof_result.stdout)
+            
+            # Extract proof and inputs
+            return {
+                'proof': proof_data['proof'],
+                'inputs': proof_data['inputs']
+            }
+            
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing commands in container: {e.stderr}")
+            return False
+        except json.JSONDecodeError as e:
+            print(f"Error parsing proof.json: {e}")
+            return False
+
+
+async def main():
+    prover = ZoKratesProof()
+    data = prover.execute_in_container(101, 1, 30, 70)
+    print(f"Proof generation {'successful' if data else 'failed'}")
+    getter = Proof()
+    proof = await getter.get_proof(data)
+
+     
+
+    return proof
+
 
 if __name__ == "__main__":
-    main()
+    #hash = main()
+    hash = asyncio.run(main())
+    print(hash)

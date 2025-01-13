@@ -2,6 +2,9 @@
   "transactions": [
     {
       "rpc": "https://polygon-amoy.g.alchemy.com/v2/0plhBWPIgZkEyMtrIPJPNa3yNCmpwIfY"
+    },
+    {
+      "rpc": "https://polygon-amoy.g.alchemy.com/v2/0plhBWPIgZkEyMtrIPJPNa3yNCmpwIfY"
     }
   ]
 }

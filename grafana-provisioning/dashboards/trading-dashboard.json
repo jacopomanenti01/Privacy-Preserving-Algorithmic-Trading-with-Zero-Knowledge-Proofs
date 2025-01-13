@@ -89,7 +89,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"orders\")\n  |> filter(fn: (r) => r._field == \"OrderID\")\n  |> count()",
+          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -72h)\n  |> filter(fn: (r) => r._measurement == \"orders\")\n  |> filter(fn: (r) => r._field == \"OrderID\")\n  |> count()",
           "refId": "A"
         }
       ],
@@ -153,7 +153,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"pl\")\n  |> aggregateWindow(\n    every: 24h,\n    fn: (tables=<-, column=\"_value\") => tables\n      |> reduce(\n        fn: (r, accumulator) => ({\n          count: accumulator.count + 1.0,\n          true_count: if r._value then accumulator.true_count + 1.0 else accumulator.true_count\n        }),\n        identity: {count: 0.0, true_count: 0.0}\n      )\n  )\n  |> map(fn: (r) => ({_value: r.true_count / r.count  * 100.0}))",
+          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -72h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"pl\")\n  |> aggregateWindow(\n    every: 24h,\n    fn: (tables=<-, column=\"_value\") => tables\n      |> reduce(\n        fn: (r, accumulator) => ({\n          count: accumulator.count + 1.0,\n          true_count: if r._value then accumulator.true_count + 1.0 else accumulator.true_count\n        }),\n        identity: {count: 0.0, true_count: 0.0}\n      )\n  )\n  |> map(fn: (r) => ({_value: r.true_count / r.count  * 100.0}))",
           "refId": "A"
         }
       ],
@@ -552,7 +552,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"unrealized_plpc\")\n  |> map(fn: (r) => ({ r with _value: r._value * 100000.0 }))\n  |> group(columns: [\"symbol\"])\n  |> aggregateWindow(every: 1h, fn: sum)\n  |> yield(name: \"Unrealized P/L by Symbol\")",
+          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -72h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"unrealized_plpc\")\n  |> map(fn: (r) => ({ r with _value: r._value * 100000.0 }))\n  |> group(columns: [\"symbol\"])\n  |> aggregateWindow(every: 1h, fn: sum)\n  |> yield(name: \"Unrealized P/L by Symbol\")",
           "refId": "A"
         }
       ],
@@ -702,7 +702,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"${DOCKER_INFLUXDB_INIT_BUCKET}\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"Duration\")",
+          "query": "from(bucket: \"${DOCKER_INFLUXDB_INIT_BUCKET}\")\n  |> range(start: -72h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"Duration\")",
           "refId": "A"
         }
       ],
@@ -720,7 +720,7 @@
     "list": []
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-72h",
     "to": "now"
   },
   "timepicker": {},
