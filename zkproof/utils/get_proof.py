@@ -9,9 +9,10 @@ import asyncio
 
 # Internal imports
 
+'''   
 class Proof():
 
-        
+    
     def load_env_file(self):
         dir_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         env_path = os.path.join(dir_path, "zkproof_forge", ".env")
@@ -46,6 +47,7 @@ class Proof():
             raise FileNotFoundError(f"ABI file not found at: {abi_dir}")
         except KeyError:
             raise KeyError("ABI key not found in JSON file")
+
 
     def format_proof_for_ethereum(self, proof_dict):
         """
@@ -129,9 +131,7 @@ class Proof():
                 #print(f"Transaction sent: {tx_hash.hex()}")
            
 
-async def main():
-     getter = Proof()
-     proof = await getter.get_proof()
+
 
      
 
@@ -140,12 +140,18 @@ async def main():
 def hex_to_int(hex_str):
     # Remove '0x' prefix if present and convert to int
     return int(hex_str.replace('0x', ''), 16)
-            
+
+
+async def main():
+     getter = Proof()
+     proof = await getter.get_proof()
+
 if __name__ =="__main__":
     # initialize the model
     hash = asyncio.run(main())
     print(hash)
 
+'''  
 
     
 

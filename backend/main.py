@@ -150,15 +150,23 @@ class TradingBot():
             status='open',
             symbol=self.ticker
         )
+        second_filter = GetOrdersRequest(
+            status='closed',
+            symbol=self.ticker
+        )
         
         # Get and cancel all matching orders
         orders = self.trading_client.get_orders(filter=order_filter)
+        position = self.trading_client.get_orders(filter=second_filter)
+       
         print(f"order len : {len(orders)}")
         id = None
         for order in orders:
-            id = order.id
             self.trading_client.cancel_order_by_id(order.id)
         # Wait a moment for orders to be cancelled
+        for pos in position:
+            id = pos.id
+            break
         time.sleep(1)
 
 
@@ -319,28 +327,21 @@ class TradingBot():
             prediction = trend_classification(features, self.model)
 
             # remove this
-            # fd10eb89-0790-481b-8f84-9da7984d85ba
+
             
+     
             order = self.buy_bracket()
+
             await self.store_order(order=order)
-            #risk_metrics, closed_order = self.close_position()
 
-            #pos = self.trading_client.get_open_position(self.ticker)
-
-            #print("closing")
-
-            #risk_metrics, closed_order = self.close_position()
-
-            #await self.store_closed_position(risk =risk_metrics, order=closed_order)
-
-
-            print(f"This is buy order id: {order.id}")
- 
             risk_metrics, closed_order = self.close_position()
-            print(risk_metrics)
-            await self.store_closed_position(risk = risk_metrics, order=closed_order)
-            print(f"This is buy order id: {order.id}")
-            print(f"This is close order id: {risk_metrics}")
+            print(f"This is  order id {order.id}")
+
+            print(f"This is closed order info {risk_metrics}")
+
+            await self.store_closed_position(risk =risk_metrics, order=closed_order)
+
+
 
 
 
@@ -459,7 +460,7 @@ async def main():
 
 
     # initialize trading bot
-    bot = TradingBot(ticker = "AAPL", #GOLD
+    bot = TradingBot(ticker = "GOLD", #GOLD #AAPL
                  api_key=api_key,
                  api_secret=api_secret, 
                  OVERBOUGHT_THRESH=60, 

@@ -29,10 +29,30 @@ async def get_influx_client() -> InfluxDBClientAsync:
 async def close_throughput(write_api: WriteApiAsync, datapoint: dict, price, risk) -> None:
     print("\n ''''''''''''''''''''''''")
     print("\ncreating data point for closed position:")
+
+    # get time when the position was opened
+    query = f'''
+        from(bucket: "{THROUGHPUT_BUCKET}")
+            |> range(start: -24h)
+            |> filter(fn: (r) => r._measurement == "orders")
+            |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+            |> filter(fn: (r) => r.OrderID == "{str(risk["id"])}")
+            |> yield(name: "last")
+        '''
+    client = await get_influx_client()
+    query_api = client.query_api()
+
+    result = await query_api.query_data_frame(query=query)
+    open_time = result["_time"].iloc[0]
+    time_diff = (datapoint.submitted_at - open_time).total_seconds()
+
+
+
+
     point = Point("closed_position")
     point = point.field('OrderID', str(risk["id"]))
     point = point.field('symbol', str(datapoint.symbol))
-
+    point = point.field('time_delta', time_diff)
     point = point.field('OrderSide', datapoint.side)
     point = point.field('OrderQTY', float(risk["qty"]))
     point = point.field('ClosePrice', price)
@@ -43,6 +63,7 @@ async def close_throughput(write_api: WriteApiAsync, datapoint: dict, price, ris
     
     await write_api.write(bucket=THROUGHPUT_BUCKET, org=INFLUX_ORG, record=point)
     print("New closed position data point saved on influxdb")
+    await client.close()        
 
 
 
@@ -52,6 +73,7 @@ async def write_throughput(write_api: WriteApiAsync, datapoint: dict, price, is_
     if not is_updated:
         print("\n ''''''''''''''''''''''''")
         print("\ncreating data point:")
+        
         point = Point("orders")
         
 
@@ -69,6 +91,8 @@ async def write_throughput(write_api: WriteApiAsync, datapoint: dict, price, is_
         point = point.field('OrderPrice', price)
 
         point = point.time(datapoint.submitted_at)
+
+        print(f"this is the take profit id: {datapoint.legs[0].id}")
         
         '''
         point = point.field('OrderLastUpdate', str(datapoint.updated_at.isoformat()))
@@ -118,6 +142,7 @@ async def write_throughput(write_api: WriteApiAsync, datapoint: dict, price, is_
         if not result.empty:
             take_profit = float(result["TakeProfit"].iloc[0])
             stop_loss = float(result["StopLoss"].iloc[0])
+
         elif result.empty:
             query = f'''
         from(bucket: "{THROUGHPUT_BUCKET}")
@@ -129,7 +154,7 @@ async def write_throughput(write_api: WriteApiAsync, datapoint: dict, price, is_
         '''
             result = await query_api.query_data_frame(query=query)
             take_profit = float(result["NewTakeProfit"].iloc[0])
-            stop_loss = float(result["NewStopLoss"].iloc[0])
+            stop_loss = float(result["NewLossProfit"].iloc[0])
 
 
         point = Point("bracket_updates") \

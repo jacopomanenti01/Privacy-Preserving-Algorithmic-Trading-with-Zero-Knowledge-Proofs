@@ -14,6 +14,8 @@ import datetime
 
 
 
+
+
 class ZkProof():
 
     def __init__(self, ticker, day):
@@ -66,26 +68,11 @@ class ZkProof():
 
         return check
 
-    async def main(self):
-        await self.set_hash_from_smart()
-        check = self.check_hash()
 
-        print(self.rsi())
 
     
 
-    def generate_order_proof(self):
-    # Prove:
-    # 1. RSI value is correctly calculated
-    # 2. Price thresholds are met
-    # 3. Position size is within limits
-    # 4. Stop loss/take profit are correctly set
-    #rsi_proof = prove_rsi_threshold()
-        
-    # Strategy logic
-    #prediction_proof = verify_model_output()
-    #entry_conditions = verify_entry_rules()
-        pass
+    
 
 
     def rsi(self):
@@ -98,6 +85,38 @@ class ZkProof():
     # 2. Model prediction (1 or 2)
     # 3. Position existence check
         pass
+
+    def generate_order_proof(self):
+        # Prove:
+        # 1. RSI value is correctly calculated ok
+        # 2. Price thresholds are met 
+        # 3. Position size is within limits
+        # 4. Stop loss/take profit are correctly set
+        #rsi_proof = prove_rsi_threshold()
+            
+        # Strategy logic
+        #prediction_proof = verify_model_output()
+        #entry_conditions = verify_entry_rules()
+            pass
+
+    async def main(self):
+        await self.set_hash_from_smart()
+        check = self.check_hash()
+
+        print(self.rsi())
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Input: Private data (e.g., df['close'] for RSI calculation or features for prediction).

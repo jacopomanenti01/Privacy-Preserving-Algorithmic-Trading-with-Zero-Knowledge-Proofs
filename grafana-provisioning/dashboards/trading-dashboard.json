@@ -104,7 +104,7 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-GrYlRd"
+            "mode": "continuous-RdYlGr"
           },
           "mappings": [],
           "thresholds": {
@@ -115,8 +115,8 @@
                 "value": null
               },
               {
-                "color": "red",
-                "value": 80
+                "color": "green",
+                "value": 70
               }
             ]
           },
@@ -386,6 +386,7 @@
             "axisLabel": "Unrealized P/L (%)",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 20,
             "gradientMode": "scheme",
@@ -435,6 +436,7 @@
         "x": 0,
         "y": 14
       },
+      "id": 13,
       "options": {
         "legend": {
           "calcs": [
@@ -451,6 +453,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -462,9 +465,9 @@
         }
       ],
       "title": "Unrealized P/L by Symbol (%)",
-      "type": "timeseries",
-      "pluginVersion": "11.4.0"
-    },{
+      "type": "timeseries"
+    },
+    {
       "datasource": {
         "type": "influxdb",
         "uid": "P951FEA4DE68E13C5"
@@ -481,6 +484,7 @@
             "axisLabel": "Unrealized P/L ($)",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 20,
             "gradientMode": "scheme",
@@ -530,6 +534,7 @@
         "x": 12,
         "y": 14
       },
+      "id": 14,
       "options": {
         "legend": {
           "calcs": [
@@ -546,19 +551,19 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -72h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"unrealized_plpc\")\n  |> map(fn: (r) => ({ r with _value: r._value * 100000.0 }))\n  |> group(columns: [\"symbol\"])\n  |> aggregateWindow(every: 1h, fn: sum)\n  |> yield(name: \"Unrealized P/L by Symbol\")",
+          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"unrealized_plpc\")\n  |> map(fn: (r) => ({ r with _value: r._value * 100000.0 }))\n  |> group(columns: [\"symbol\"])\n  |> aggregateWindow(every: 1h, fn: sum)\n  |> yield(name: \"Unrealized P/L by Symbol\")",
           "refId": "A"
         }
       ],
       "title": "Unrealized P/L by Symbol ($)",
-      "type": "timeseries",
-      "pluginVersion": "11.4.0"
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -568,7 +573,7 @@
         "x": 0,
         "y": 22
       },
-      "id": 7,
+      "id": 8,
       "panels": [],
       "title": "Risk Management",
       "type": "row"
@@ -581,18 +586,28 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-BlYlRd"
+            "mode": "palette-classic"
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              }
-            ]
+          "custom": {
+            "axisCenteredZero": true,
+            "axisPlacement": "auto",
+            "axisSoftMax": 40,
+            "axisSoftMin": -10,
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
-          "unit": "none"
+          "displayName": "green TP-SL Distance; yellow TP Change;blue Risk/Reward Ratio",
+          "max": 40,
+          "min": -10,
+          "unit": "short"
         },
         "overrides": []
       },
@@ -602,44 +617,51 @@
         "x": 0,
         "y": 23
       },
-      "id": 8,
+      "id": 15,
       "options": {
-        "displayMode": "gradient",
         "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "maxVizHeight": 300,
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
           "calcs": [
-            "lastNotNull"
+            "mean",
+            "max",
+            "min"
           ],
-          "fields": "",
-          "values": false
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
         },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "color"
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
       },
-      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"${DOCKER_INFLUXDB_INIT_BUCKET}\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"orders\")\n  |> filter(fn: (r) => r._field == \"RiskRewardRatio\")\n  |> last()",
+          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"bracket_updates\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n      _time: r._time,\n      _value: float(v: r.NewTakeProfit) - float(v: r.NewLossProfit),\n      _measurement: \"bracket_updates\",\n      _field: \"TP-SL Distance\",\n      symbol: r.symbol\n    }))",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"bracket_updates\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n      _time: r._time,\n      _value: float(v: r.NewTakeProfit) - float(v: r.OldTakeProfit),\n      _measurement: \"bracket_updates\",\n      _field: \"TP Change\",\n      symbol: r.symbol\n    }))",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "P951FEA4DE68E13C5"
+          },
+          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"bracket_updates\")\n  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\n      _time: r._time,\n      _value: (float(v: r.NewTakeProfit) - float(v: r.NewLossProfit)) / (float(v: r.OldTakeProfit) - float(v: r.OldStopLoss)),\n      _measurement: \"bracket_updates\",\n      _field: \"Risk/Reward Ratio\",\n      symbol: r.symbol\n    }))",
+          "refId": "C"
         }
       ],
-      "title": "Risk/Reward Distribution",
-      "type": "bargauge"
+      "title": "Risk/Reward Analysis",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -660,7 +682,7 @@
               }
             ]
           },
-          "unit": "ms"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -672,28 +694,18 @@
       },
       "id": 9,
       "options": {
-        "displayMode": "basic",
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "maxVizHeight": 300,
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "vertical",
         "reduceOptions": {
           "calcs": [
-            "mean"
+            "lastNotNull"
           ],
           "fields": "",
-          "values": false
+          "values": true
         },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "color"
+        "textMode": "value_and_name"
       },
       "pluginVersion": "11.4.0",
       "targets": [
@@ -702,12 +714,12 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"${DOCKER_INFLUXDB_INIT_BUCKET}\")\n  |> range(start: -72h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> filter(fn: (r) => r._field == \"Duration\")",
+          "query": "from(bucket: \"my_bucket\")\n  |> range(start: -72h)\n  |> filter(fn: (r) => r._measurement == \"closed_position\")\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.time_delta)\n  |> group(columns: [\"symbol\"])\n  |> mean(column: \"time_delta\")",
           "refId": "A"
         }
       ],
-      "title": "Average Position Duration",
-      "type": "bargauge"
+      "title": "Average Position Duration by Symbol",
+      "type": "stat"
     }
   ],
   "preload": false,
@@ -727,6 +739,6 @@
   "timezone": "browser",
   "title": "Trading Bot Dashboard",
   "uid": "trading-bot",
-  "version": 27,
+  "version": 70,
   "weekStart": ""
 }
