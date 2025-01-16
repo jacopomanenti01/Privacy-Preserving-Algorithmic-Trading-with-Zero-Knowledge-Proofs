@@ -1,4 +1,14 @@
-def main(private field rsi, private field prediction, field oversold_threshold, field overbought_threshold) -> field {
+// Example from https://zokrates.github.io/gettingstarted.html
+
+def main(
+    private field rsi,
+    private field prediction,
+    field oversold_threshold,
+    field overbought_threshold,
+    field haspos,
+    field ret,
+    private field thresh
+) -> bool {
     // Verify RSI is within valid range
     assert(rsi >= 0);
     assert(rsi <= 100);
@@ -6,17 +16,45 @@ def main(private field rsi, private field prediction, field oversold_threshold, 
     // Verify prediction is valid (0, 1, 2)
     assert(prediction >= 0);
     assert(prediction <= 2);
+
+    // Verify has position
+    assert(haspos >= 0);
+    assert(haspos <= 1);
+
+    // Verify return
+    assert(ret >= 0);
+    assert(ret <= 100);
+
+    // Verify thresh
+    assert(thresh >= 0);
+    assert(thresh <= 100);
     
     // Trading logic conditions
     field oversold_condition = if rsi <= oversold_threshold { 1 } else { 0 };
     field overbought_condition = if rsi >= overbought_threshold { 1 } else { 0 };
-    
+
+    // Check position
+    field check_position = if haspos == 1 { 1 } else { 0 };
+
+    // Check return
+    field check_return = if ret >= thresh { 1 } else { 0 };
+
     // Buy signal: RSI oversold (≤30) and prediction is 1
-    field buy_signal = if oversold_condition == 1 && prediction == 1 { 1 } else { 0 };
+    field buy_signal = if oversold_condition == 1 && prediction == 1 && check_position == 0 { 1 } else { 0 };
     
     // Sell signal: RSI overbought (≥70) and prediction is 2
-    field sell_signal = if overbought_condition == 1 && prediction == 2 { 1 } else { 0 };
-    
-    // Return trading decision (1 for buy, 2 for sell, 0 for hold)
-    return if buy_signal == 1 { 1 } else { if sell_signal == 1 { 2 } else { 0 } };
+    field sell_signal = if overbought_condition == 1 && prediction == 2 && check_position == 1 { 1 } else { 0 };
+
+    // Update signals
+    field update_signal_overbought = if overbought_condition == 1 && prediction == 1 && check_position == 1 && check_return == 1 { 1 } else { 0 };
+    field update_signal_oversold = if oversold_condition == 1 && prediction == 1 && check_position == 1 && check_return == 1 { 1 } else { 0 };
+
+    // Combine signals
+    bool combined_signal = if buy_signal == 1 { true } else { 
+        if sell_signal == 1 { true } else { 
+            if update_signal_overbought == 1 || update_signal_oversold == 1 { true } else { false } 
+        } 
+    };
+
+    return combined_signal;
 }

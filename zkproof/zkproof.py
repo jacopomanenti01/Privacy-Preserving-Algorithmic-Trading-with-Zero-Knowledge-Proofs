@@ -1,6 +1,7 @@
 import hashlib
 from utils.get_hash import Getter
 from zkproof_forge.utils.model_hash import compute_model_hash
+from Proover import prove
 import os
 import asyncio
 import talib
@@ -9,6 +10,7 @@ import sys
 from dotenv import load_dotenv
 import pytz
 import datetime
+import joblib
 
 
 
@@ -20,9 +22,12 @@ class ZkProof():
 
     def __init__(self, ticker, day):
         self.day = day
-        self.delta = 15
+        self.delta = 49
         self.hash_from_smart = None
         self.hash_computed = compute_model_hash()
+        self.prediction = self.initialize_prediction()
+        self.model = self.initialize_model()
+        self.features = self.initialize_features()
 
         # Load environment variables
         dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -39,7 +44,6 @@ class ZkProof():
         self.data =  self.initialize_data()
 
     def initialize_broker(self, ticker, api_key, api_secret):
-        pass
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         print(project_root)
         sys.path.append(project_root)  # Add project root to Python path
@@ -51,6 +55,33 @@ class ZkProof():
     def initialize_data(self):
         return self.broker.retreive_historical_bars(self.delta, self.day )
         
+    def initialize_prediction(self):
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        print(project_root)
+        sys.path.append(project_root)  # Add project root to Python path
+    
+        # Now we can import the class
+        from backend.utils.prediction import trend_classification
+        return trend_classification
+    
+    def initialize_model(self):
+        repo_root = os.path.dirname(os.path.dirname(__file__))
+        path = os.path.join(repo_root, "Test", "mlModel", "best_model_xboost.joblib")
+        print(f"Model in path: {path}")
+        model = joblib.load(path)
+        return model
+
+
+    def initialize_features(self):
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        print(project_root)
+        sys.path.append(project_root)  # Add project root to Python path
+    
+        # Now we can import the class
+        from backend.utils.feature import features_extraction
+        return features_extraction
+
+
 
     async def set_hash_from_smart(self):
         getter = Getter()
@@ -78,54 +109,46 @@ class ZkProof():
     def rsi(self):
         rsi_value = round(talib.RSI(self.data['close'], timeperiod=14).iloc[-1],2)
         return rsi_value
-
-    def verify_trading_decision(self):
-    # Create circuit for:
-    # 1. RSI conditions (< 40 or > 60)
-    # 2. Model prediction (1 or 2)
-    # 3. Position existence check
+    
+    def get_return_per_day(self,date):
         pass
 
-    def generate_order_proof(self):
-        # Prove:
-        # 1. RSI value is correctly calculated ok
-        # 2. Price thresholds are met 
-        # 3. Position size is within limits
-        # 4. Stop loss/take profit are correctly set
-        #rsi_proof = prove_rsi_threshold()
-            
-        # Strategy logic
-        #prediction_proof = verify_model_output()
-        #entry_conditions = verify_entry_rules()
-            pass
+  
 
     async def main(self):
         await self.set_hash_from_smart()
         check = self.check_hash()
 
-        print(self.rsi())
+        print(f"checking model hash:{check}")
+
+        if check:
+
+            features = self.features(self.data)
+            prediction =  self.prediction(features, self.model)
+
+            print(f"Prediction is {prediction}")
+            current_path = os.getcwd()
+            print(f"calling the function from {current_path}")
+            oversold_threshold = os.getenv("OVERSOLD_THRESHOLD")
+            overbought_threshold = os.getenv("OVERBOUGHT_THRESHOLD")
+            thresh = os.getenv("THRESH")
+            proof = await prove(
+                rsi = int(self.rsi()),
+                prediction = prediction,
+                oversold_threshold = oversold_threshold,
+                overbought_threshold = overbought_threshold,
+                haspos = 0,
+                ret = 10,
+                thresh = thresh
+            )
+            
+            print(f"Trade has been verified, resul is: {proof}")
+            return proof
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-# Input: Private data (e.g., df['close'] for RSI calculation or features for prediction).
-# Computation: Perform the calculations (e.g., RSI or prediction logic).
-# Output: A proof that the computation is correct without revealing the input data.
-
-# 1. Store the Model Hash on the Blockchain
-# Instead of storing the full model, store a cryptographic hash of the model on the blockchain.
-# When loading the model, recompute its hash and compare it to the stored hash to verify integrity.
 
 if __name__ == "__main__":
     et = pytz.timezone('US/Eastern')

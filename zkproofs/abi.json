@@ -19,9 +19,24 @@
       "name": "overbought_threshold",
       "public": true,
       "type": "field"
+    },
+    {
+      "name": "haspos",
+      "public": true,
+      "type": "field"
+    },
+    {
+      "name": "ret",
+      "public": true,
+      "type": "field"
+    },
+    {
+      "name": "thresh",
+      "public": false,
+      "type": "field"
     }
   ],
   "output": {
-    "type": "field"
+    "type": "bool"
   }
 }
